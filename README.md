@@ -28,7 +28,9 @@ embeddings = get_embeddings(
 An example using the same parameters as the authors, with an undirected and unweighted graph:
 ```python
 from lib import get_embeddings, low_pass_filter_kernel
+
 import numpy as np
+import networkx as nx
 
 G = nx.karate_club_graph()
 # parameters used in paper
