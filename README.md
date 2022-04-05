@@ -19,7 +19,7 @@ Embeddings are generated for a networkx graph through the ```get_embeddings``` f
 embeddings = get_embeddings(
     G, # networkx graph
     S, # list of scales
-    T, # list of "times"
+    T, # list of sampling points
     q, # rotation parameter
     kernel, # a kernel function. Can be a custom function or lib.heat_kernel | low_pass_filter_kernel
     **kernel_args # parameters supplied to the kernel

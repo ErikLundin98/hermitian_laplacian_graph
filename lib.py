@@ -81,7 +81,7 @@ def get_embeddings(G:nx.Graph, S:list[float], T:list[float], q=0.5, kernel:calla
     params:
     G: The graph to extract embeddings from
     S: List of scale parameters
-    T: List of parameters
+    T: List of sampling points
     q: Rotation parameter for the Hermitian Laplacian
     kernel: A kernel callable that can take a one-dimensional numpy array as input and returns a transformed version of the input
     **kernel_args: keyword arguments for the kernel function
