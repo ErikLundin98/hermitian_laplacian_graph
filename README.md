@@ -46,7 +46,7 @@ embeddings = get_embeddings(
     T=T,
     q=q,
     kernel=kernel,
-    c= 2
+    c=2
 )
 
 ```
