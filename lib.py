@@ -48,8 +48,6 @@ def hermitian_laplacian(A:np.matrix, q) -> np.matrix:
     for i, j in zip(*A.nonzero()):
         Gamma[i, j] = gamma(A, i, j, q)
 
-    #Gamma[Gamma == 0] = 1
-
     L_q = D - np.multiply(Gamma,A_s)
     
     return L_q
