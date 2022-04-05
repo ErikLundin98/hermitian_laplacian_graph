@@ -115,6 +115,7 @@ def get_embeddings(G:nx.Graph, S:list[float], T:list[float], q=0.5, kernel:calla
 
 
 if __name__ == '__main__':
+    # Demo with karate club graph
     G = nx.karate_club_graph().to_directed()
     N = len(G.nodes)
     q = 0.02
