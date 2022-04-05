@@ -1,6 +1,8 @@
 import networkx as nx
 import numpy as np
 from typing import Union
+from numba import jit
+
 """
 This is a non-official implementation of 
 "Graph Signal Processing for Directed Graphs based on the Hermitian Laplacian",
@@ -18,6 +20,7 @@ def get_adj(G:nx.Graph) -> np.matrix:
     """Utility function to extract the adjacency matrix of a networkx graph"""
     return nx.to_numpy_array(G)
 
+@jit
 def gamma(A:np.matrix, i, j, q) -> np.float32:
     """
     Input:
@@ -30,14 +33,15 @@ def gamma(A:np.matrix, i, j, q) -> np.float32:
     """
     return np.exp(1j * np.pi * q * (A[i, j] - A[j, i]))
 
+@jit
 def degree_matrix(A:np.matrix) -> np.matrix:
     """Returns a degree matrix of a weighted or unweighted adjacency matrix"""
     return np.diag(np.sum(A, axis=1))
 
-def hermitian_laplacian(G:nx.Graph, q) -> np.ndarray:
+@jit
+def hermitian_laplacian(A:np.matrix, q) -> np.matrix:
     """Returns the Hermitian Laplacian of a graph as defined in the paper"""
-    
-    A = get_adj(G)
+
     A_s = (A + A.T)/2
     D = degree_matrix(A_s)
     Gamma = np.zeros(A.shape, dtype=np.complex64)
@@ -50,14 +54,17 @@ def hermitian_laplacian(G:nx.Graph, q) -> np.ndarray:
     
     return L_q
 
+@jit
 def low_pass_filter_kernel(x:np.ndarray, c:float=1.0) -> np.ndarray:
     """Low-pass filter kernel"""
     return 1/(1+c*x)
 
+@jit
 def heat_kernel(x:np.ndarray) -> np.ndarray:
     """Heat kernel"""
     return np.exp(-x)
 
+@jit
 def phi(psi:np.matrix, i:int, t:float) -> np.float32:
     """
     Computes an embedding from the wavelet for a node I
@@ -83,7 +90,8 @@ def get_embeddings(G:nx.Graph, S:list[float], T:list[float], q=0.5, kernel:calla
     **kernel_args: keyword arguments for the kernel function
     """
     N = len(G.nodes)
-    L_q = hermitian_laplacian(G, q)
+    A = get_adj(G)
+    L_q = hermitian_laplacian(A, q)
     eigenvalues, U = np.linalg.eig(L_q)
     eigenvalues = np.real(eigenvalues)
     U = np.matrix(U)
