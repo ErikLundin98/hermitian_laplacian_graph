@@ -50,3 +50,8 @@ embeddings = get_embeddings(
 )
 
 ```
+
+
+See [this youtube clip](https://www.youtube.com/watch?v=S4QZiUPJkRI) for a brief explanation of how GraphWave works - they use the graph Laplacian, which only works for undirected graphs and is replaced by the Hermitian Laplacian by Furutani et al.
+
+See [Wikipedia](https://en.wikipedia.org/wiki/Laplacian_matrix#Symmetric_Laplacian_for_a_directed_graph) for an explanation of laplacian matrices

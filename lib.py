@@ -44,7 +44,7 @@ def hermitian_laplacian(G:nx.Graph, q) -> np.ndarray:
     for i, j in zip(*A.nonzero()):
         Gamma[i, j] = gamma(A, i, j, q)
 
-    Gamma[Gamma == 0] = 1
+    #Gamma[Gamma == 0] = 1
 
     L_q = D - np.multiply(Gamma,A_s)
     
