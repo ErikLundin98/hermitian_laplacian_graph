@@ -1,6 +1,7 @@
 import networkx as nx
 import numpy as np
 from numba import jit
+from typing import Union
 
 """
 This is a non-official implementation of 
@@ -74,20 +75,23 @@ def phi(psi:np.matrix, i:int, t:float) -> np.float32:
         np.exp(1j * t * psi[i, :])
     )
 
-def get_embeddings(G:nx.Graph, S:list[float], T:list[float], q=0.5, kernel:callable=low_pass_filter_kernel, **kernel_args) -> np.matrix:
+def get_embeddings(A:Union[nx.Graph, np.matrix], S:list[float], T:list[float], q=0.5, kernel:callable=low_pass_filter_kernel, **kernel_args) -> np.matrix:
     """
     Main function that computes graphwave embeddings from the Hermitian Laplacian
     Can be used with a (un)weighted (di)graph
     params:
-    G: The graph to extract embeddings from
+    G: Adjacency matrix or networkx graph to extract embeddings from
     S: List of scale parameters
     T: List of sampling points
     q: Rotation parameter for the Hermitian Laplacian
     kernel: A kernel callable that can take a one-dimensional numpy array as input and returns a transformed version of the input
     **kernel_args: keyword arguments for the kernel function
     """
-    N = len(G.nodes)
-    A = get_adj(G)
+    if isinstance(A, nx.Graph):
+        A = get_adj(A)
+    
+    N = A.shape[0]
+    
     L_q = hermitian_laplacian(A, q)
     eigenvalues, U = np.linalg.eig(L_q)
     eigenvalues = np.real(eigenvalues)
@@ -119,6 +123,6 @@ if __name__ == '__main__':
     S = np.arange(10)*0.1+0.1
     T = np.arange(10)*0.1+0.1
 
-    embeddings = get_embeddings(G, S, T, q, kernel=low_pass_filter_kernel, c=2)
+    embeddings = get_embeddings(get_adj(G), S, T, q, kernel=low_pass_filter_kernel, c=2)
     print(embeddings.shape)
     print(np.count_nonzero(embeddings), embeddings.size)

@@ -17,7 +17,7 @@ Embeddings are generated for a networkx graph through the ```get_embeddings``` f
 
 ```python
 embeddings = get_embeddings(
-    G, # networkx graph
+    A, # networkx graph or numpy matrix
     S, # list of scales
     T, # list of sampling points
     q, # rotation parameter
@@ -41,7 +41,7 @@ kernel = low_pass_filter_kernel
 c = 2
 
 embeddings = get_embeddings(
-    G=G,
+    A=G,
     S=S,
     T=T,
     q=q,
