@@ -63,7 +63,7 @@ def heat_kernel(x:np.ndarray) -> np.ndarray:
     return np.exp(-x)
 
 @jit
-def phi(psi:np.matrix, i:int, t:float) -> np.float32:
+def phi(psi:np.matrix, t:float) -> np.float32:
     """
     Computes an embedding from the wavelet for a node I
     params:
@@ -72,7 +72,8 @@ def phi(psi:np.matrix, i:int, t:float) -> np.float32:
     t: embedding parameter
     """
     return 1/psi.shape[0] * np.sum(
-        np.exp(1j * t * psi[i, :])
+        np.exp(1j * t * psi),
+        axis=1
     )
 
 def get_embeddings(A:Union[nx.Graph, np.matrix], S:list[float], T:list[float], q=0.5, kernel:callable=low_pass_filter_kernel, **kernel_args) -> np.matrix:
@@ -107,10 +108,9 @@ def get_embeddings(A:Union[nx.Graph, np.matrix], S:list[float], T:list[float], q
         G_hat_s = np.diag(kernel(eigenvalues*s, **kernel_args))
         psi = U @ G_hat_s @ U.H @ delta
         for t_idx, t in enumerate(T):
-            for i in range(N):
-                phi_i = phi(psi, i, t)
-                re_embeddings[i, s_idx*len_T + t_idx] = np.real(phi_i)
-                im_embeddings[i, s_idx*len_T + t_idx] = np.imag(phi_i)
+            phi_i = phi(psi, t)
+            re_embeddings[:, s_idx*len_T + t_idx] = np.real(phi_i)
+            im_embeddings[:, s_idx*len_T + t_idx] = np.imag(phi_i)
 
     return np.concatenate([re_embeddings, im_embeddings], axis=1)
 
