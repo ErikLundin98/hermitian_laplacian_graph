@@ -79,7 +79,8 @@ def phi(psi:np.matrix, t:float) -> np.float32:
         axis=1
     )
 
-def determine_proper_S(eigenvalues:np.ndarray[float]) -> np.ndarray[float]:
+@jit
+def determine_proper_S(eigenvalues:np.ndarray) -> np.ndarray:
     """Determine scale parameter values according to graphwave"""
     nu = 0.85
     gamma = 0.95
@@ -113,7 +114,7 @@ def get_embeddings(A:Union[nx.Graph, np.matrix], S:list[float]=None, T:list[floa
     eigenvalues, U = np.linalg.eig(L_q)
     eigenvalues = np.real(eigenvalues)
 
-    if not S:
+    if S is None:
         S = determine_proper_S(eigenvalues)
 
     U = np.matrix(U)
@@ -140,9 +141,10 @@ if __name__ == '__main__':
     G = nx.karate_club_graph().to_directed()
     N = len(G.nodes)
     q = 0.02
-    S = np.arange(10)*0.1+0.1
-    T = np.arange(10)*0.1+0.1
-
-    embeddings = get_embeddings(get_adj(G), S, T, q, kernel=low_pass_filter_kernel, c=2)
+    
+    S = HERMLAP_S
+    T = HERMLAP_T
+   
+    embeddings = get_embeddings(get_adj(G), S=S, T=T, q=q, kernel=low_pass_filter_kernel, c=2)
     print(embeddings.shape)
     print(np.count_nonzero(embeddings), embeddings.size)
