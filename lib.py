@@ -15,6 +15,9 @@ Springer, Cham, 2019. p. 447-463.
 ******************************************************************************
 """
 
+# Parameters used by Fututani et al.
+HERMLAP_S = np.arange(2.0, 20.1, 0.1) 
+HERMLAP_T = np.arange(1, 11, 1) 
 
 def get_adj(G:nx.Graph) -> np.matrix:
     """Utility function to extract the adjacency matrix of a networkx graph"""
@@ -76,17 +79,30 @@ def phi(psi:np.matrix, t:float) -> np.float32:
         axis=1
     )
 
-def get_embeddings(A:Union[nx.Graph, np.matrix], S:list[float], T:list[float], q=0.5, kernel:callable=low_pass_filter_kernel, **kernel_args) -> np.matrix:
+def determine_proper_S(eigenvalues:np.ndarray[float]) -> np.ndarray[float]:
+    """Determine scale parameter values according to graphwave"""
+    nu = 0.85
+    gamma = 0.95
+    denom = np.sqrt(eigenvalues[1]*eigenvalues[-1])
+    s_max = -np.log(nu)/denom
+    s_min = -np.log(gamma)/denom
+    S = np.linspace(s_min, s_max, 2)
+    return S
+
+def get_embeddings(A:Union[nx.Graph, np.matrix], S:list[float]=None, T:list[float]=np.arange(0, 101, 2), q=0.5, kernel:callable=low_pass_filter_kernel, **kernel_args) -> np.matrix:
     """
     Main function that computes graphwave embeddings from the Hermitian Laplacian
     Can be used with a (un)weighted (di)graph
     params:
     G: Adjacency matrix or networkx graph to extract embeddings from
-    S: List of scale parameters
+    S: List of scale parameters. Determines the radius of network neighborhood
     T: List of sampling points
     q: Rotation parameter for the Hermitian Laplacian
     kernel: A kernel callable that can take a one-dimensional numpy array as input and returns a transformed version of the input
     **kernel_args: keyword arguments for the kernel function
+    returns:
+    a N x 2*|S|*|T| matrix
+    if S is not specified, an appropriate range of values will be determined automatically according to the GraphWave paper
     """
     if isinstance(A, nx.Graph):
         A = get_adj(A)
@@ -96,6 +112,10 @@ def get_embeddings(A:Union[nx.Graph, np.matrix], S:list[float], T:list[float], q
     L_q = hermitian_laplacian(A, q)
     eigenvalues, U = np.linalg.eig(L_q)
     eigenvalues = np.real(eigenvalues)
+
+    if not S:
+        S = determine_proper_S(eigenvalues)
+
     U = np.matrix(U)
     delta = np.eye(N)
 
