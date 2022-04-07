@@ -2,7 +2,7 @@ import networkx as nx
 import numpy as np
 from numba import jit
 from typing import Union
-
+from tqdm.auto import tqdm
 """
 This is a non-official implementation of 
 "Graph Signal Processing for Directed Graphs based on the Hermitian Laplacian",
@@ -112,7 +112,7 @@ def get_embeddings(A:Union[nx.Graph, np.matrix], S:list[float]=None, T:list[floa
     
     L_q = hermitian_laplacian(A, q)
     eigenvalues, U = np.linalg.eig(L_q)
-    eigenvalues = np.real(eigenvalues)
+    eigenvalues = np.real(np.array(eigenvalues))
 
     if S is None:
         S = determine_proper_S(eigenvalues)
@@ -125,10 +125,10 @@ def get_embeddings(A:Union[nx.Graph, np.matrix], S:list[float]=None, T:list[floa
 
     len_T = len(T)
 
-    for s_idx, s in enumerate(S):
+    for s_idx, s in enumerate(tqdm(S)):
         G_hat_s = np.diag(kernel(eigenvalues*s, **kernel_args))
         psi = U @ G_hat_s @ U.H @ delta
-        for t_idx, t in enumerate(T):
+        for t_idx, t in enumerate(tqdm(T, leave=False)):
             phi_i = phi(psi, t)
             re_embeddings[:, s_idx*len_T + t_idx] = np.real(phi_i)
             im_embeddings[:, s_idx*len_T + t_idx] = np.imag(phi_i)
