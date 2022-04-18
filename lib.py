@@ -3,6 +3,7 @@ import numpy as np
 from numba import jit
 from typing import Union
 from tqdm.auto import tqdm
+
 """
 This is a non-official implementation of 
 "Graph Signal Processing for Directed Graphs based on the Hermitian Laplacian",
@@ -15,7 +16,7 @@ Springer, Cham, 2019. p. 447-463.
 ******************************************************************************
 """
 
-# Parameters used by Fututani et al.
+# Parameters used by Furutani et al.
 HERMLAP_S = np.arange(2.0, 20.1, 0.1) 
 HERMLAP_T = np.arange(1, 11, 1) 
 
@@ -90,7 +91,7 @@ def determine_proper_S(eigenvalues:np.ndarray) -> np.ndarray:
     S = np.linspace(s_min, s_max, 2)
     return S
 
-def get_embeddings(A:Union[nx.Graph, np.matrix], S:list[float]=None, T:list[float]=np.arange(0, 101, 2), q=0.5, kernel:callable=low_pass_filter_kernel, **kernel_args) -> np.matrix:
+def get_embeddings(A:Union[nx.Graph, np.matrix], S:list[float]=None, T:list[float]=np.arange(0, 101, 2), q=0.5, kernel:callable=low_pass_filter_kernel, progress:bool=False, **kernel_args) -> np.matrix:
     """
     Main function that computes graphwave embeddings from the Hermitian Laplacian
     Can be used with a (un)weighted (di)graph
@@ -109,12 +110,14 @@ def get_embeddings(A:Union[nx.Graph, np.matrix], S:list[float]=None, T:list[floa
         A = get_adj(A)
     
     N = A.shape[0]
-    
+    if progress: print("computing the hermitian laplacian")
     L_q = hermitian_laplacian(A, q)
+    if progress: print("computing eigenvectors and eigenvalues")
     eigenvalues, U = np.linalg.eig(L_q)
     eigenvalues = np.real(np.array(eigenvalues))
 
     if S is None:
+        if progress: print("auto-inferring S")
         S = determine_proper_S(eigenvalues)
 
     U = np.matrix(U)
@@ -124,11 +127,11 @@ def get_embeddings(A:Union[nx.Graph, np.matrix], S:list[float]=None, T:list[floa
     im_embeddings = np.zeros(re_embeddings.shape)
 
     len_T = len(T)
-
-    for s_idx, s in enumerate(tqdm(S)):
+    print("extracting features")
+    for s_idx, s in enumerate(tqdm(S, disable=not progress)):
         G_hat_s = np.diag(kernel(eigenvalues*s, **kernel_args))
         psi = U @ G_hat_s @ U.H @ delta
-        for t_idx, t in enumerate(tqdm(T, leave=False)):
+        for t_idx, t in enumerate(tqdm(T, leave=False, disable=not progress)):
             phi_i = phi(psi, t)
             re_embeddings[:, s_idx*len_T + t_idx] = np.real(phi_i)
             im_embeddings[:, s_idx*len_T + t_idx] = np.imag(phi_i)
