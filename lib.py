@@ -86,10 +86,10 @@ def determine_proper_S(eigenvalues:np.ndarray, n:int=5) -> np.ndarray:
     nu = 0.85
     gamma = 0.95
     denom = np.sqrt(eigenvalues[1]*eigenvalues[-1])
+    if denom == 0: denom = 1
     s_max = -np.log(nu)/denom
     s_min = -np.log(gamma)/denom
-    step = (s_max - s_min)/n
-    S = s_min + np.arange(start=0, stop=n+1)*step
+    S = np.linspace(s_min, s_max, n)
     return S
 
 def get_embeddings(A:Union[nx.Graph, np.matrix], S:list[float]=None, T:list[float]=np.arange(0, 101, 2), q=0.5, kernel:callable=low_pass_filter_kernel, progress:bool=False, **kernel_args) -> np.matrix:
@@ -149,6 +149,6 @@ if __name__ == '__main__':
     S = None
     T = HERMLAP_T
    
-    embeddings = get_embeddings(get_adj(G), S=S, T=T, q=q, kernel=low_pass_filter_kernel, c=2)
+    embeddings = get_embeddings(nx.disjoint_union(G, G), S=S, T=T, q=q, kernel=low_pass_filter_kernel, c=2)
     print(embeddings.shape)
     print(np.count_nonzero(embeddings), embeddings.size)
