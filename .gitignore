@@ -3,3 +3,4 @@ venv/
 paper.pdf
 lib_sparse.py
 timings.ipynb
+tests.ipynb

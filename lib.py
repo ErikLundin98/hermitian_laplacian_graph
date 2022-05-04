@@ -1,8 +1,11 @@
+from xml.dom.pulldom import END_DOCUMENT
 import networkx as nx
 import numpy as np
 from numba import jit
 from typing import Union
 from tqdm.auto import tqdm
+from scipy.sparse.linalg import expm_multiply
+import scipy
 
 """
 This is a non-official implementation of 
@@ -70,10 +73,6 @@ def heat_kernel(x:np.ndarray) -> np.ndarray:
 def phi(psi:np.matrix, t:float) -> np.float32:
     """
     Computes an embedding from the wavelet for a node I
-    params:
-    psi: Wavelets for the graph
-    i: index of node
-    t: embedding parameter
     """
     return 1/psi.shape[0] * np.sum(
         np.exp(1j * t * psi),
@@ -91,6 +90,51 @@ def determine_proper_S(eigenvalues:np.ndarray, n:int=5) -> np.ndarray:
     s_min = -np.log(gamma)/denom
     S = np.linspace(s_min, s_max, n)
     return S
+
+def eigen(A):
+    eigenValues, eigenVectors = scipy.linalg.eigh(A)
+    idx = np.argsort(eigenValues)[::-1]
+    eigenValues = eigenValues[idx]
+    eigenVectors = eigenVectors[:,idx]
+    return (eigenValues, eigenVectors)
+
+def get_embeddings_fast(A:Union[nx.Graph, np.matrix], S:list[float]=None, T:list[float]=np.arange(0, 101, 2), q=0.5, progress=False) -> np.matrix:
+    """
+    Assumes that the heat kernel is used to compute embeddings faster
+    https://docs.scipy.org/doc/scipy/reference/generated/scipy.sparse.linalg.expm_multiply.html
+    A is - L_q
+    B is diagonal vector
+    start, stop is S.
+
+    replaces
+        G_hat_s = np.diag(kernel(eigenvalues*s, **kernel_args))
+        psi = U @ G_hat_s @ U.H @ delta
+    """
+    if isinstance(A, nx.Graph):
+        A = get_adj(A)
+    
+    N = A.shape[0]
+    if progress: print("computing the hermitian laplacian")
+    L_q = hermitian_laplacian(A, q)
+
+    delta = np.eye(N)
+
+    re_embeddings = np.zeros((N, len(S)*len(T)))
+    im_embeddings = np.zeros(re_embeddings.shape)
+
+    if progress: print("extracting features")
+    
+    
+    psi = expm_multiply(-L_q, delta, S[0], S[-1], len(S))
+    for t_idx, t in enumerate(tqdm(T, disable=not progress)):
+        phi_i = 1/psi.shape[1] * np.sum(np.exp(1j * t * psi), axis=-1).transpose(1, 0)
+        start_idx = t_idx*phi_i.shape[-1]
+        end_idx = start_idx + phi_i.shape[-1]
+        re_embeddings[:, start_idx:end_idx] = np.real(phi_i)
+        im_embeddings[:, start_idx:end_idx] = np.imag(phi_i)
+
+    return np.concatenate([re_embeddings, im_embeddings], axis=1)
+
 
 def get_embeddings(A:Union[nx.Graph, np.matrix], S:list[float]=None, T:list[float]=np.arange(0, 101, 2), q=0.5, kernel:callable=low_pass_filter_kernel, progress:bool=False, **kernel_args) -> np.matrix:
     """
@@ -128,7 +172,7 @@ def get_embeddings(A:Union[nx.Graph, np.matrix], S:list[float]=None, T:list[floa
     im_embeddings = np.zeros(re_embeddings.shape)
 
     len_T = len(T)
-    print("extracting features")
+    if progress: print("extracting features")
     for s_idx, s in enumerate(tqdm(S, disable=not progress)):
         G_hat_s = np.diag(kernel(eigenvalues*s, **kernel_args))
         psi = U @ G_hat_s @ U.H @ delta
@@ -143,12 +187,16 @@ def get_embeddings(A:Union[nx.Graph, np.matrix], S:list[float]=None, T:list[floa
 if __name__ == '__main__':
     # Demo with karate club graph
     G = nx.random_tree(100)
-    N = len(G.nodes)
+    # N = len(G.nodes)
     q = 0.02
     
-    S = None
+    S = HERMLAP_S
     T = HERMLAP_T
    
-    embeddings = get_embeddings(nx.disjoint_union(G, G), S=S, T=T, q=q, kernel=low_pass_filter_kernel, c=2)
-    print(embeddings.shape)
-    print(np.count_nonzero(embeddings), embeddings.size)
+    # embeddings = get_embeddings(nx.disjoint_union(G, G), S=S, T=T, q=q, kernel=low_pass_filter_kernel, c=2)
+    embeddings_1 = get_embeddings_fast(G, S=S, T=T, q=q)
+    embeddings_2 = get_embeddings(G, S, T, q, kernel=heat_kernel)
+
+    print(embeddings_1 == embeddings_2)
+    # print(embeddings.shape)
+    # print(np.count_nonzero(embeddings), embeddings.size)
