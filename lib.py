@@ -56,6 +56,11 @@ def degree_matrix(A:np.matrix) -> np.matrix:
     return np.diag(np.sum(A, axis=1))
 
 @jit
+def inverse_sqrt_degree_matrix(A:np.matrix) -> np.matrix:
+    """Returns an inverse square root degree matrix of a weighted or unweighted adjacency matrix"""
+    return np.diag(1/np.sqrt(np.sum(A, axis=1)))
+
+@jit
 def hermitian_laplacian(A:np.matrix, q) -> np.matrix:
     """Returns the Hermitian Laplacian of a graph as defined in the paper"""
     
@@ -66,10 +71,6 @@ def hermitian_laplacian(A:np.matrix, q) -> np.matrix:
         Gamma[i, j] = gamma(A, i, j, q)
 
     L_q = D - np.multiply(Gamma,A_s)
-    if not check_binary(A): # weighted - normalize the Laplacian
-        i_D = 1/np.sqrt(D)
-        L_q = i_D @ L_q @ i_D
-
     return L_q
 
 @jit
@@ -170,6 +171,11 @@ def get_embeddings(A:Union[nx.Graph, np.matrix], S:List[float]=None, T:List[floa
     N = A.shape[0]
     if progress: print("computing the hermitian laplacian")
     L_q = hermitian_laplacian(A, q)
+    # normalize if weighted
+    if not check_binary(A): # weighted - normalize the Laplacian
+        if progress: print("computing normalized laplacian")
+        i_D = inverse_sqrt_degree_matrix(A)
+        L_q = i_D @ L_q @ i_D
     if progress: print("computing eigenvectors and eigenvalues")
     eigenvalues, U = np.linalg.eig(L_q)
     eigenvalues = np.real(np.array(eigenvalues))
@@ -199,7 +205,7 @@ def get_embeddings(A:Union[nx.Graph, np.matrix], S:List[float]=None, T:List[floa
 
 if __name__ == '__main__':
     # Demo with karate club graph
-    G = nx.random_tree(100)
+    G = nx.karate_club_graph().to_directed()
     # N = len(G.nodes)
     q = 0.02
     
@@ -207,9 +213,7 @@ if __name__ == '__main__':
     T = HERMLAP_T
    
     # embeddings = get_embeddings(nx.disjoint_union(G, G), S=S, T=T, q=q, kernel=low_pass_filter_kernel, c=2)
-    embeddings_1 = get_embeddings_fast(G, S=S, T=T, q=q)
-    embeddings_2 = get_embeddings(G, S, T, q, kernel=heat_kernel)
-
-    print(embeddings_1 == embeddings_2)
+    # embeddings_1 = get_embeddings_fast(G, S=S, T=T, q=q)
+    embeddings_2 = get_embeddings(G, S, T, q, kernel=heat_kernel, progress=True)
     # print(embeddings.shape)
     # print(np.count_nonzero(embeddings), embeddings.size)
