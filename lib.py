@@ -149,7 +149,7 @@ def get_embeddings_fast(A:Union[nx.Graph, np.matrix], S:List[float]=None, T:List
     return np.concatenate([re_embeddings, im_embeddings], axis=1)
 
 
-def get_embeddings(A:Union[nx.Graph, np.matrix], S:list[float]=None, T:list[float]=np.arange(0, 101, 2), q=0.5, kernel:callable=heat_kernel, progress:bool=False, **kernel_args) -> np.matrix:
+def get_embeddings(A:Union[nx.Graph, np.matrix], S:List[float]=None, T:List[float]=np.arange(0, 101, 2), q=0.5, kernel:callable=heat_kernel, progress:bool=False, **kernel_args) -> np.matrix:
     """
     Main function that computes graphwave embeddings from the Hermitian Laplacian
     Can be used with a (un)weighted (di)graph
