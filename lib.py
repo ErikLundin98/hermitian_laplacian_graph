@@ -48,7 +48,7 @@ def degree_matrix(A:np.matrix) -> np.matrix:
 @jit
 def hermitian_laplacian(A:np.matrix, q) -> np.matrix:
     """Returns the Hermitian Laplacian of a graph as defined in the paper"""
-
+    
     A_s = (A + A.T)/2
     D = degree_matrix(A_s)
     Gamma = np.zeros(A.shape, dtype=np.complex64)
@@ -56,7 +56,10 @@ def hermitian_laplacian(A:np.matrix, q) -> np.matrix:
         Gamma[i, j] = gamma(A, i, j, q)
 
     L_q = D - np.multiply(Gamma,A_s)
-    
+    if np.array_equal(A, A.astype(bool)): # weighted - normalize the Laplacian
+        i_D = 1/np.sqrt(D)
+        L_q = i_D @ L_q @ i_D
+
     return L_q
 
 @jit
