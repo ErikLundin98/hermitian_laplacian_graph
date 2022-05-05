@@ -1,8 +1,8 @@
 from xml.dom.pulldom import END_DOCUMENT
 import networkx as nx
 import numpy as np
-from numba import jit
-from typing import Union
+from numba import jit, njit
+from typing import Union, List
 from tqdm.auto import tqdm
 from scipy.sparse.linalg import expm_multiply
 import scipy
@@ -26,6 +26,16 @@ HERMLAP_T = np.arange(1, 11, 1)
 def get_adj(G:nx.Graph) -> np.matrix:
     """Utility function to extract the adjacency matrix of a networkx graph"""
     return nx.to_numpy_array(G)
+
+@njit
+def check_binary(x):
+    is_binary = True
+    for v in np.nditer(x):
+        if v.item() != 0 and v.item() != 1:
+            is_binary = False
+            break
+
+    return is_binary
 
 @jit
 def gamma(A:np.matrix, i, j, q) -> np.float32:
@@ -56,7 +66,7 @@ def hermitian_laplacian(A:np.matrix, q) -> np.matrix:
         Gamma[i, j] = gamma(A, i, j, q)
 
     L_q = D - np.multiply(Gamma,A_s)
-    if np.array_equal(A, A.astype(bool)): # weighted - normalize the Laplacian
+    if not check_binary(A): # weighted - normalize the Laplacian
         i_D = 1/np.sqrt(D)
         L_q = i_D @ L_q @ i_D
 
@@ -101,7 +111,7 @@ def eigen(A):
     eigenVectors = eigenVectors[:,idx]
     return (eigenValues, eigenVectors)
 
-def get_embeddings_fast(A:Union[nx.Graph, np.matrix], S:list[float]=None, T:list[float]=np.arange(0, 101, 2), q=0.5, progress=False) -> np.matrix:
+def get_embeddings_fast(A:Union[nx.Graph, np.matrix], S:List[float]=None, T:List[float]=np.arange(0, 101, 2), q=0.5, progress=False) -> np.matrix:
     """
     Assumes that the heat kernel is used to compute embeddings faster
     https://docs.scipy.org/doc/scipy/reference/generated/scipy.sparse.linalg.expm_multiply.html
