@@ -1,4 +1,3 @@
-from xml.dom.pulldom import END_DOCUMENT
 import networkx as nx
 import numpy as np
 from numba import jit, njit
@@ -20,12 +19,14 @@ Springer, Cham, 2019. p. 447-463.
 """
 
 # Parameters used by Furutani et al.
-HERMLAP_S = np.arange(2.0, 20.1, 0.1) 
-HERMLAP_T = np.arange(1, 11, 1) 
+HERMLAP_S = np.arange(2.0, 20.1, 0.1)
+HERMLAP_T = np.arange(1, 11, 1)
 
-def get_adj(G:nx.Graph) -> np.matrix:
+
+def get_adj(G: nx.Graph) -> np.matrix:
     """Utility function to extract the adjacency matrix of a networkx graph"""
     return nx.to_numpy_array(G)
+
 
 @njit
 def check_binary(x):
@@ -37,8 +38,9 @@ def check_binary(x):
 
     return is_binary
 
+
 @jit
-def gamma(A:np.matrix, i, j, q) -> np.float32:
+def gamma(A: np.matrix, i, j, q) -> np.float32:
     """
     Input:
     A: weighted or unweighted adjacency matrix of a directed graph
@@ -48,71 +50,140 @@ def gamma(A:np.matrix, i, j, q) -> np.float32:
     Returns:
     the value of the gamma function
     """
-    return np.exp(1j * np.pi * q * (A[i, j] - A[j, i]))
+    return np.exp(1j * 2 * np.pi * q * (A[i, j] - A[j, i]))
+
 
 @jit
-def degree_matrix(A:np.matrix) -> np.matrix:
+def degree_matrix(A: np.matrix) -> np.matrix:
     """Returns a degree matrix of a weighted or unweighted adjacency matrix"""
     return np.diag(np.sum(A, axis=1))
 
-@jit
-def inverse_sqrt_degree_matrix(A:np.matrix) -> np.matrix:
-    """Returns an inverse square root degree matrix of a weighted or unweighted adjacency matrix"""
-    return np.diag(1/np.sqrt(np.sum(A, axis=1)))
+
+def inverse_sqrt_degree_matrix(A: np.matrix) -> np.matrix:
+    """Returns an (pseudo) inverse square root degree matrix of a weighted or unweighted adjacency matrix"""
+    return np.linalg.pinv(
+        np.diag(np.sqrt(np.sum(A, axis=1)))
+    )
+    
 
 @jit
-def hermitian_laplacian(A:np.matrix, q) -> np.matrix:
+def hermitian_laplacian(A: np.matrix, q) -> np.matrix:
     """Returns the Hermitian Laplacian of a graph as defined in the paper"""
-    
-    A_s = (A + A.T)/2
+
+    A_s = (A + A.T) / 2
     D = degree_matrix(A_s)
     Gamma = np.zeros(A.shape, dtype=np.complex64)
-    for i, j in zip(*A.nonzero()):
+    for i, j in zip(*A_s.nonzero()):
         Gamma[i, j] = gamma(A, i, j, q)
 
-    L_q = D - np.multiply(Gamma,A_s)
+    L_q = D - np.multiply(Gamma, A_s)
     return L_q
 
-@jit
-def low_pass_filter_kernel(x:np.ndarray, c:float=1.0) -> np.ndarray:
-    """Low-pass filter kernel"""
-    return 1/(1+c*x)
+def normalize_laplacian(A:np.matrix, L_q: np.matrix) -> np.matrix:    
+    i_D = inverse_sqrt_degree_matrix(A)
+    L_q = i_D @ L_q @ i_D
+    return L_q
+
 
 @jit
-def heat_kernel(x:np.ndarray) -> np.ndarray:
+def low_pass_filter_kernel(x: np.ndarray, c: float = 1.0) -> np.ndarray:
+    """Low-pass filter kernel"""
+    return 1 / (1 + c * x)
+
+
+@jit
+def heat_kernel(x: np.ndarray) -> np.ndarray:
     """Heat kernel"""
     return np.exp(-x)
 
+
 @jit
-def phi(psi:np.matrix, t:float) -> np.float32:
+def phi(psi: np.matrix, t: float) -> np.float32:
     """
     Computes an embedding from the wavelet for a node I
     """
-    return 1/psi.shape[0] * np.sum(
+    return 1 / psi.shape[0] * np.sum(
         np.exp(1j * t * psi),
         axis=1
     )
 
+
 @jit
-def determine_proper_S(eigenvalues:np.ndarray, n:int=5) -> np.ndarray:
+def determine_proper_S(eigenvalues: np.ndarray, n: int = 5) -> np.ndarray:
     """Determine scale parameter values according to graphwave"""
     nu = 0.85
     gamma = 0.95
-    denom = np.sqrt(eigenvalues[1]*eigenvalues[-1])
+    denom = np.sqrt(eigenvalues[1] * eigenvalues[-1])
     if denom == 0: denom = 1
-    s_max = -np.log(nu)/denom
-    s_min = -np.log(gamma)/denom
+    s_max = -np.log(nu) / denom
+    s_min = -np.log(gamma) / denom
     S = np.linspace(s_min, s_max, n)
     return S
+
 
 def eigen(A):
     eigenValues, eigenVectors = scipy.linalg.eigh(A)
     idx = np.argsort(eigenValues)[::-1]
     eigenValues = eigenValues[idx]
-    eigenVectors = eigenVectors[:,idx]
+    eigenVectors = eigenVectors[:, idx]
     return (eigenValues, eigenVectors)
 
-def get_embeddings_fast(A:Union[nx.Graph, np.matrix], S:List[float]=None, T:List[float]=np.arange(0, 101, 2), q=0.5, progress=False) -> np.matrix:
+
+def scipy_expm(L_q, S: List[float]):
+    N = L_q.shape[0]
+    delta = np.eye(N)
+    psi = expm_multiply(-L_q, delta, S[0], S[-1], len(S))
+    return psi
+
+
+def eigen_expm(L_q, S: List[float] = None, kernel: callable = heat_kernel, progress: bool = False, **kernel_args):
+    N = L_q.shape[0]
+    eigenvalues, U = np.linalg.eigh(L_q)
+    eigenvalues = np.array(eigenvalues)
+    # U = np.matrix(U)
+    delta = np.eye(N)
+
+    if S is None:
+        if progress: print("auto-inferring S")
+        S = determine_proper_S(np.real(eigenvalues))
+
+    psi = []
+    for s_idx, s in enumerate(tqdm(S, disable=not progress)):
+        G_hat_s = np.diag(kernel(eigenvalues * s, **kernel_args))
+        psi.append(U @ G_hat_s @ U.conjugate().T @ delta)
+    return np.stack(psi, axis=0), S
+
+
+def characteristic_function1(psi, T: List[float] = np.arange(0, 101, 2), progress: bool = False):
+    N = psi.shape[1]
+    re_embeddings = np.zeros((N, len(psi) * len(T)))
+    im_embeddings = np.zeros(re_embeddings.shape)
+
+    for t_idx, t in enumerate(tqdm(T, disable=not progress)):
+        phi_i = 1 / N * np.sum(np.exp(1j * t * psi), axis=-1).transpose(1, 0)
+        start_idx = t_idx * phi_i.shape[-1]
+        end_idx = start_idx + phi_i.shape[-1]
+        re_embeddings[:, start_idx:end_idx] = np.real(phi_i)
+        im_embeddings[:, start_idx:end_idx] = np.imag(phi_i)
+    return np.concatenate([re_embeddings, im_embeddings], axis=1)
+
+
+def characteristic_function2(psi, T: List[float] = np.arange(0, 101, 2), progress: bool = False):
+    N = psi.shape[1]
+    re_embeddings = np.zeros((N, len(psi) * len(T)))
+    im_embeddings = np.zeros(re_embeddings.shape)
+
+    len_T = len(T)
+    for s_idx, psi_ in enumerate(tqdm(psi, disable=not progress)):
+        for t_idx, t in enumerate(tqdm(T, leave=False, disable=not progress)):
+            phi_i = phi(psi_, t)
+            re_embeddings[:, s_idx * len_T + t_idx] = np.real(phi_i)
+            im_embeddings[:, s_idx * len_T + t_idx] = np.imag(phi_i)
+    return np.concatenate([re_embeddings, im_embeddings], axis=1)
+
+
+def get_embeddings_fast(A: Union[nx.Graph, np.matrix], S: List[float] = None, T: List[float] = np.arange(0, 101, 2),
+                        q: float = 0.5, progress: bool = False, normalize: bool = False) -> np.array:
     """
     Assumes that the heat kernel is used to compute embeddings faster
     https://docs.scipy.org/doc/scipy/reference/generated/scipy.sparse.linalg.expm_multiply.html
@@ -126,31 +197,22 @@ def get_embeddings_fast(A:Union[nx.Graph, np.matrix], S:List[float]=None, T:List
     """
     if isinstance(A, nx.Graph):
         A = get_adj(A)
-    
-    N = A.shape[0]
+
     if progress: print("computing the hermitian laplacian")
     L_q = hermitian_laplacian(A, q)
+    if normalize:
+        if progress: print("normalizing laplacian")
+        L_q = normalize_laplacian(A, L_q)
+        
 
-    delta = np.eye(N)
+    psi = scipy_expm(L_q, S)
+    embeddings = characteristic_function1(psi, T, progress)
 
-    re_embeddings = np.zeros((N, len(S)*len(T)))
-    im_embeddings = np.zeros(re_embeddings.shape)
-
-    if progress: print("extracting features")
-    
-    
-    psi = expm_multiply(-L_q, delta, S[0], S[-1], len(S))
-    for t_idx, t in enumerate(tqdm(T, disable=not progress)):
-        phi_i = 1/psi.shape[1] * np.sum(np.exp(1j * t * psi), axis=-1).transpose(1, 0)
-        start_idx = t_idx*phi_i.shape[-1]
-        end_idx = start_idx + phi_i.shape[-1]
-        re_embeddings[:, start_idx:end_idx] = np.real(phi_i)
-        im_embeddings[:, start_idx:end_idx] = np.imag(phi_i)
-
-    return np.concatenate([re_embeddings, im_embeddings], axis=1)
+    return embeddings
 
 
-def get_embeddings(A:Union[nx.Graph, np.matrix], S:List[float]=None, T:List[float]=np.arange(0, 101, 2), q=0.5, kernel:callable=heat_kernel, progress:bool=False, **kernel_args) -> np.matrix:
+def get_embeddings(A: Union[nx.Graph, np.matrix], S: List[float] = None, T: List[float] = np.arange(0, 101, 2), q:float = 0.5,
+                   kernel: callable = heat_kernel, progress: bool = False, normalize: bool = False, **kernel_args) -> np.ndarray:
     """
     Main function that computes graphwave embeddings from the Hermitian Laplacian
     Can be used with a (un)weighted (di)graph
@@ -167,53 +229,15 @@ def get_embeddings(A:Union[nx.Graph, np.matrix], S:List[float]=None, T:List[floa
     """
     if isinstance(A, nx.Graph):
         A = get_adj(A)
-    
-    N = A.shape[0]
+
     if progress: print("computing the hermitian laplacian")
     L_q = hermitian_laplacian(A, q)
-    # normalize if weighted
-    if not check_binary(A): # weighted - normalize the Laplacian
-        if progress: print("computing normalized laplacian")
-        i_D = inverse_sqrt_degree_matrix(A)
-        L_q = i_D @ L_q @ i_D
+    if normalize:
+        if progress: print("normalizing laplacian")
+        L_q = normalize_laplacian(A, L_q)
+        
     if progress: print("computing eigenvectors and eigenvalues")
-    eigenvalues, U = np.linalg.eig(L_q)
-    eigenvalues = np.real(np.array(eigenvalues))
+    psi, S = eigen_expm(L_q, S, kernel, progress, **kernel_args)
+    embeddings = characteristic_function2(psi, T, progress)
 
-    if S is None:
-        if progress: print("auto-inferring S")
-        S = determine_proper_S(eigenvalues)
-
-    U = np.matrix(U)
-    delta = np.eye(N)
-
-    re_embeddings = np.zeros((N, len(S)*len(T)))
-    im_embeddings = np.zeros(re_embeddings.shape)
-
-    len_T = len(T)
-    if progress: print("extracting features")
-    for s_idx, s in enumerate(tqdm(S, disable=not progress)):
-        G_hat_s = np.diag(kernel(eigenvalues*s, **kernel_args))
-        psi = U @ G_hat_s @ U.H @ delta
-        for t_idx, t in enumerate(tqdm(T, leave=False, disable=not progress)):
-            phi_i = phi(psi, t)
-            re_embeddings[:, s_idx*len_T + t_idx] = np.real(phi_i)
-            im_embeddings[:, s_idx*len_T + t_idx] = np.imag(phi_i)
-
-    return np.concatenate([re_embeddings, im_embeddings], axis=1)
-
-
-if __name__ == '__main__':
-    # Demo with karate club graph
-    G = nx.karate_club_graph().to_directed()
-    # N = len(G.nodes)
-    q = 0.02
-    
-    S = HERMLAP_S
-    T = HERMLAP_T
-   
-    # embeddings = get_embeddings(nx.disjoint_union(G, G), S=S, T=T, q=q, kernel=low_pass_filter_kernel, c=2)
-    # embeddings_1 = get_embeddings_fast(G, S=S, T=T, q=q)
-    embeddings_2 = get_embeddings(G, S, T, q, kernel=heat_kernel, progress=True)
-    # print(embeddings.shape)
-    # print(np.count_nonzero(embeddings), embeddings.size)
+    return embeddings
